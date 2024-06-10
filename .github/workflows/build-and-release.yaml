@@ -19,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.20
+          go-version: 1.21
 
       - name: Download Helm Binaries
         run: |
@@ -104,4 +104,4 @@ jobs:
           draft: false
           prerelease: false
           artifacts: "ovc,assets/*"
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
