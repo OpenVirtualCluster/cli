@@ -34,16 +34,23 @@ jobs:
           tar -zxvf helm-v3.11.2-darwin-amd64.tar.gz
           mv darwin-amd64/helm assets/helm-darwin
 
-      - name: Build
-        run: go build -o ovc
+      - name: Build Linux Binary
+        run: GOOS=linux GOARCH=amd64 go build -o ovc-linux
+
+      - name: Build macOS Binary
+        run: GOOS=darwin GOARCH=amd64 go build -o ovc-darwin
+
+      - name: Build Windows Binary
+        run: GOOS=windows GOARCH=amd64 go build -o ovc.exe
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: ovc
           path: |
-            ovc
-            assets
+            ovc-linux
+            ovc-darwin
+            ovc.exe
 
   release:
     runs-on: ubuntu-latest
@@ -108,5 +115,8 @@ jobs:
           name: Release ${{ steps.calculate_version.outputs.version }}
           draft: false
           prerelease: false
-          artifacts: "ovc,assets/*"
+          artifacts: |
+            ovc-linux
+            ovc-darwin
+            ovc.exe
           token: ${{ secrets.GITHUB_TOKEN }}
