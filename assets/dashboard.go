@@ -1,8 +1,9 @@
 package assets
 
 import (
+	"embed"
 	_ "embed"
 )
 
-//go:embed dashboard.zip
-var DashboardZip []byte
+//go:embed .next
+var NextFS embed.FS

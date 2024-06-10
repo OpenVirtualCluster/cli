@@ -37,9 +37,7 @@ jobs:
           cd dashboard
           npm install
           npm run build
-          npm run export
-          cd out
-          zip -r ../../assets/dashboard.zip .
+          cp -r .next ../../assets/
 
       - name: Download Helm Binaries
         run: |
