@@ -7,6 +7,10 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -91,11 +95,11 @@ jobs:
       - name: Create Release Tag
         if: github.event_name == 'push' && github.ref != 'refs/tags/*'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           new_tag=${{ steps.calculate_version.outputs.version }}
           git tag $new_tag
-          git push https://x-access-token:${GH_TOKEN}@github.com/OpenVirtualCluster/cli.git $new_tag
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git $new_tag
 
       - name: Create Release
         uses: ncipollo/release-action@v1
@@ -105,4 +109,4 @@ jobs:
           draft: false
           prerelease: false
           artifacts: "ovc,assets/*"
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
