@@ -24,6 +24,23 @@ jobs:
         with:
           go-version: 1.21
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20'
+
+      - name: Clone the dashboard repo
+        run: git clone https://github.com/OpenVirtualCluster/dashboard.git
+
+      - name: Build dashboard
+        run: |
+          cd dashboard
+          npm install
+          npm run build
+          npm run export
+          cd out
+          zip -r ../../assets/dashboard.zip .
+
       - name: Download Helm Binaries
         run: |
           curl -LO https://get.helm.sh/helm-v3.11.2-linux-amd64.tar.gz
