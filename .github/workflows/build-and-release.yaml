@@ -1,0 +1,107 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20
+
+      - name: Download Helm Binaries
+        run: |
+          curl -LO https://get.helm.sh/helm-v3.11.2-linux-amd64.tar.gz
+          tar -zxvf helm-v3.11.2-linux-amd64.tar.gz
+          mv linux-amd64/helm assets/helm-linux
+          
+          curl -LO https://get.helm.sh/helm-v3.11.2-darwin-amd64.tar.gz
+          tar -zxvf helm-v3.11.2-darwin-amd64.tar.gz
+          mv darwin-amd64/helm assets/helm-darwin
+
+      - name: Build
+        run: go build -o ovc
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ovc
+          path: |
+            ovc
+            assets
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Get the latest tag
+        id: get_tag
+        run: echo ::set-output name=tag::$(git describe --tags --abbrev=0)
+
+      - name: Calculate next version
+        id: calculate_version
+        run: |
+          latest_tag=${{ steps.get_tag.outputs.tag }}
+          echo "Latest tag: $latest_tag"
+          
+          if [[ $latest_tag == v* ]]; then
+            latest_version=${latest_tag:1}
+          else
+            latest_version=$latest_tag
+          fi
+          
+          IFS='.' read -r -a version_parts <<< "$latest_version"
+          major=${version_parts[0]}
+          minor=${version_parts[1]}
+          patch=${version_parts[2]}
+          
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" != refs/tags/* ]]; then
+            patch=$((patch + 1))
+          fi
+          
+          new_version="v$major.$minor.$patch"
+          echo "New version: $new_version"
+          echo ::set-output name=version::$new_version
+
+      - name: Create Release Tag
+        if: github.event_name == 'push' && github.ref != 'refs/tags/*'
+        run: |
+          new_tag=${{ steps.calculate_version.outputs.version }}
+          git tag $new_tag
+          git push origin $new_tag
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.calculate_version.outputs.version }}
+          name: Release ${{ steps.calculate_version.outputs.version }}
+          draft: false
+          prerelease: false
+          artifacts: "ovc,assets/*"
+          token: ${{ secrets.GITHUB_TOKEN }}

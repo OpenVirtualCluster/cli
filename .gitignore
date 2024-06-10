@@ -1,0 +1,48 @@
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+*.out
+
+# Compiled object files
+*.o
+*.obj
+
+# Other binary files
+*.a
+*.lib
+*.ncb
+*.sdf
+*.suo
+*.user
+*.pdb
+*.idb
+*.log
+*.tlog
+
+# Compiled binaries from various languages
+*.class
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore all files without extension
+*
+!*.*
+!*/
+
+# Except specific extensions
+!*.c
+!*.cpp
+!*.h
+!*.py
+!*.nim
+!*.nim.cfg
+!*.nims
+!*.nimble
+!*.md
+!*.txt
+
+.idea/
