@@ -7,6 +7,9 @@ on:
     tags:
       - 'v*.*.*'
 
+env:
+  VERSION: v0.0.0
+
 permissions:
   contents: write
   packages: write
@@ -83,11 +86,11 @@ jobs:
           fi
           
           new_version="v$major.$minor.$patch"
-          echo "version=$new_version" >> $GITHUB_ENV
+          echo "VERSION=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
 
       - name: Build Binary
-        run: GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ env.version }}" -o ovc-${{ matrix.os }}-${{ matrix.arch }}
+        run: GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ env.VERSION }}" -o ovc-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Calculate SHA256 Checksums
         run: |
@@ -168,13 +171,13 @@ jobs:
           fi
           
           new_version="v$major.$minor.$patch"
-          echo "version=$new_version" >> $GITHUB_ENV
+          echo "VERSION=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
 
       - name: Check if Tag Exists
         id: tag_exists
         run: |
-          if git rev-parse "refs/tags/${{ env.version }}" >/dev/null 2>&1; then
+          if git rev-parse "refs/tags/${{ env.VERSION }}" >/dev/null 2>&1; then
             echo "Tag exists"
             echo "::set-output name=exists::true"
           else
@@ -187,7 +190,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          new_tag=${{ env.version }}
+          new_tag=${{ env.VERSION }}
           git tag $new_tag
           git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git $new_tag
 
@@ -195,8 +198,8 @@ jobs:
         if: steps.tag_exists.outputs.exists == 'false'
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ env.version }}
-          name: Release ${{ env.version }}
+          tag: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
           draft: false
           prerelease: false
           artifacts: |
@@ -215,18 +218,18 @@ jobs:
     needs: release
 
     steps:
-      - name: Checkout code
+      - name: Checkout Homebrew Tap Repository
         uses: actions/checkout@v3
         with:
+          repository: OpenVirtualCluster/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.TAP_PAT }}
           fetch-depth: 0
 
       - name: Set up Git
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-
-      - name: Create Formula Directory
-        run: mkdir -p Formula
 
       - name: Download Artifacts
         uses: actions/download-artifact@v3
@@ -265,13 +268,13 @@ jobs:
 
       - name: Update Homebrew Formula
         run: |
-          version=${{ env.version }}
+          version=${{ env.VERSION }}
           sha256_linux_amd64=${{ env.sha256_linux_amd64 }}
           sha256_linux_arm64=${{ env.sha256_linux_arm64 }}
           sha256_darwin_amd64=${{ env.sha256_darwin_amd64 }}
           sha256_darwin_arm64=${{ env.sha256_darwin_arm64 }}
 
-          formula_file="Formula/ovc.rb"
+          formula_file="homebrew-tap/Formula/ovc.rb"
           url_linux_amd64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-linux-amd64"
           url_linux_arm64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-linux-arm64"
           url_darwin_amd64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-darwin-amd64"
@@ -325,8 +328,9 @@ jobs:
 
       - name: Commit and Push Changes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TAP_PAT }}
         run: |
+          cd homebrew-tap
           git add Formula/ovc.rb
-          git commit -m "Update Homebrew formula for version ${{ env.version }}"
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git
+          git commit -m "Update Homebrew formula for version ${{ env.VERSION }}"
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/homebrew-tap.git
