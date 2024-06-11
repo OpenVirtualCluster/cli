@@ -34,14 +34,49 @@ jobs:
           tar -zxvf helm-v3.11.2-darwin-amd64.tar.gz
           mv darwin-amd64/helm assets/helm-darwin
 
+      - name: Get the latest tag
+        id: get_tag
+        run: echo ::set-output name=tag::$(git describe --tags --abbrev=0 || echo "v0.0.0")
+
+      - name: Calculate next version
+        id: calculate_version
+        run: |
+          latest_tag=${{ steps.get_tag.outputs.tag }}
+          echo "Latest tag: $latest_tag"
+          
+          if [[ $latest_tag == v* ]]; then
+            latest_version=${latest_tag:1}
+          else
+            latest_version=$latest_tag
+          fi
+          
+          IFS='.' read -r -a version_parts <<< "$latest_version"
+          major=${version_parts[0]}
+          minor=${version_parts[1]}
+          patch=${version_parts[2]}
+          
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" != refs/tags/* ]]; then
+            patch=$((patch + 1))
+          fi
+          
+          new_version="v$major.$minor.$patch"
+          echo "New version: $new_version"
+          echo ::set-output name=version::$new_version
+
       - name: Build Linux Binary
-        run: GOOS=linux GOARCH=amd64 go build -o ovc-linux
+        run: GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc-linux
 
       - name: Build macOS Binary
-        run: GOOS=darwin GOARCH=amd64 go build -o ovc-darwin
+        run: GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc-darwin
 
       - name: Build Windows Binary
-        run: GOOS=windows GOARCH=amd64 go build -o ovc.exe
+        run: GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc.exe
+
+      - name: Calculate SHA256 Checksums
+        run: |
+          sha256sum ovc-linux > ovc-linux.sha256
+          sha256sum ovc-darwin > ovc-darwin.sha256
+          sha256sum ovc.exe > ovc.exe.sha256
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -51,6 +86,9 @@ jobs:
             ovc-linux
             ovc-darwin
             ovc.exe
+            ovc-linux.sha256
+            ovc-darwin.sha256
+            ovc.exe.sha256
 
   release:
     runs-on: ubuntu-latest
@@ -119,4 +157,7 @@ jobs:
             ovc-linux
             ovc-darwin
             ovc.exe
+            ovc-linux.sha256
+            ovc-darwin.sha256
+            ovc.exe.sha256
           token: ${{ secrets.GITHUB_TOKEN }}
