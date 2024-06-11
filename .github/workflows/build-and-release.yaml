@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Ensure all tags are fetched
 
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -36,7 +38,9 @@ jobs:
 
       - name: Get the latest tag
         id: get_tag
-        run: echo ::set-output name=tag::$(git describe --tags --abbrev=0 || echo "v0.0.0")
+        run: |
+          latest_tag=$(git describe --tags `git rev-list --tags --max-count=1` || echo "v0.0.0")
+          echo "::set-output name=tag::$latest_tag"
 
       - name: Calculate next version
         id: calculate_version
@@ -61,7 +65,7 @@ jobs:
           
           new_version="v$major.$minor.$patch"
           echo "New version: $new_version"
-          echo ::set-output name=version::$new_version
+          echo "::set-output name=version::$new_version"
 
       - name: Build Linux Binary
         run: GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc-linux
@@ -97,6 +101,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Ensure all tags are fetched
 
       - name: Download Artifacts
         uses: actions/download-artifact@v3
@@ -110,7 +116,9 @@ jobs:
 
       - name: Get the latest tag
         id: get_tag
-        run: echo ::set-output name=tag::$(git describe --tags --abbrev=0 || echo "v0.0.0")
+        run: |
+          latest_tag=$(git describe --tags `git rev-list --tags --max-count=1` || echo "v0.0.0")
+          echo "::set-output name=tag::$latest_tag"
 
       - name: Calculate next version
         id: calculate_version
@@ -135,10 +143,21 @@ jobs:
           
           new_version="v$major.$minor.$patch"
           echo "New version: $new_version"
-          echo ::set-output name=version::$new_version
+          echo "::set-output name=version::$new_version"
+
+      - name: Check if Tag Exists
+        id: tag_exists
+        run: |
+          if git rev-parse "refs/tags/${{ steps.calculate_version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag exists"
+            echo "::set-output name=exists::true"
+          else
+            echo "Tag does not exist"
+            echo "::set-output name=exists::false"
+          fi
 
       - name: Create Release Tag
-        if: github.event_name == 'push' && github.ref != 'refs/tags/*'
+        if: steps.tag_exists.outputs.exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -147,6 +166,7 @@ jobs:
           git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git $new_tag
 
       - name: Create Release
+        if: steps.tag_exists.outputs.exists == 'false'
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.calculate_version.outputs.version }}
