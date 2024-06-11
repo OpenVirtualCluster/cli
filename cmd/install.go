@@ -1,15 +1,13 @@
 package cmd
 
 import (
+	"github.com/OpenVirtualCluster/cli/assets"
+	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-
-	"github.com/OpenVirtualCluster/cli/assets"
-	"github.com/spf13/cobra"
 )
 
 var installCmd = &cobra.Command{
@@ -35,19 +33,8 @@ var installCmd = &cobra.Command{
 }
 
 func extractHelmBinary() string {
-	var helmData []byte
-	var helmFilename string
-
-	switch runtime.GOOS {
-	case "darwin":
-		helmData = assets.HelmDarwin
-		helmFilename = "helm-darwin"
-	case "linux":
-		helmData = assets.HelmLinux
-		helmFilename = "helm-linux"
-	default:
-		log.Fatalf("Unsupported OS: %v", runtime.GOOS)
-	}
+	var helmData []byte = assets.Helm
+	var helmFilename string = "helm"
 
 	tempDir, err := ioutil.TempDir("", "ovc-helm")
 	if err != nil {

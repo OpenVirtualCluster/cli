@@ -15,6 +15,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        os: [linux, darwin]
+        arch: [amd64, arm64]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -28,24 +33,38 @@ jobs:
 
       - name: Download Helm Binaries
         run: |
-          curl -LO https://get.helm.sh/helm-v3.11.2-linux-amd64.tar.gz
-          tar -zxvf helm-v3.11.2-linux-amd64.tar.gz
-          mv linux-amd64/helm assets/helm-linux
-          
-          curl -LO https://get.helm.sh/helm-v3.11.2-darwin-amd64.tar.gz
-          tar -zxvf helm-v3.11.2-darwin-amd64.tar.gz
-          mv darwin-amd64/helm assets/helm-darwin
+          if [ "${{ matrix.os }}" == "linux" ]; then
+            if [ "${{ matrix.arch }}" == "amd64" ]; then
+              curl -LO https://get.helm.sh/helm-v3.11.2-linux-amd64.tar.gz
+              tar -zxvf helm-v3.11.2-linux-amd64.tar.gz
+              mv linux-amd64/helm assets/helm
+            elif [ "${{ matrix.arch }}" == "arm64" ]; then
+              curl -LO https://get.helm.sh/helm-v3.11.2-linux-arm64.tar.gz
+              tar -zxvf helm-v3.11.2-linux-arm64.tar.gz
+              mv linux-arm64/helm assets/helm
+            fi
+          elif [ "${{ matrix.os }}" == "darwin" ]; then
+            if [ "${{ matrix.arch }}" == "amd64" ]; then
+              curl -LO https://get.helm.sh/helm-v3.11.2-darwin-amd64.tar.gz
+              tar -zxvf helm-v3.11.2-darwin-amd64.tar.gz
+              mv darwin-amd64/helm assets/helm
+            elif [ "${{ matrix.arch }}" == "arm64" ]; then
+              curl -LO https://get.helm.sh/helm-v3.11.2-darwin-arm64.tar.gz
+              tar -zxvf helm-v3.11.2-darwin-arm64.tar.gz
+              mv darwin-arm64/helm assets/helm
+            fi
+          fi
 
       - name: Get the latest tag
         id: get_tag
         run: |
           latest_tag=$(git describe --tags `git rev-list --tags --max-count=1` || echo "v0.0.0")
-          echo "::set-output name=tag::$latest_tag"
+          echo "tag=$latest_tag" >> $GITHUB_ENV
 
       - name: Calculate next version
         id: calculate_version
         run: |
-          latest_tag=${{ steps.get_tag.outputs.tag }}
+          latest_tag=${{ env.tag }}
           echo "Latest tag: $latest_tag"
           
           if [[ $latest_tag == v* ]]; then
@@ -64,35 +83,23 @@ jobs:
           fi
           
           new_version="v$major.$minor.$patch"
+          echo "version=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
-          echo "::set-output name=version::$new_version"
 
-      - name: Build Linux Binary
-        run: GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc-linux
-
-      - name: Build macOS Binary
-        run: GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc-darwin
-
-      - name: Build Windows Binary
-        run: GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ steps.calculate_version.outputs.version }}" -o ovc.exe
+      - name: Build Binary
+        run: GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "-X github.com/OpenVirtualCluster/ovc/cmd.Version=${{ env.version }}" -o ovc-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Calculate SHA256 Checksums
         run: |
-          sha256sum ovc-linux > ovc-linux.sha256
-          sha256sum ovc-darwin > ovc-darwin.sha256
-          sha256sum ovc.exe > ovc.exe.sha256
+          sha256sum ovc-${{ matrix.os }}-${{ matrix.arch }} > ovc-${{ matrix.os }}-${{ matrix.arch }}.sha256
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: ovc
+          name: ovc-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            ovc-linux
-            ovc-darwin
-            ovc.exe
-            ovc-linux.sha256
-            ovc-darwin.sha256
-            ovc.exe.sha256
+            ovc-${{ matrix.os }}-${{ matrix.arch }}
+            ovc-${{ matrix.os }}-${{ matrix.arch }}.sha256
 
   release:
     runs-on: ubuntu-latest
@@ -107,7 +114,26 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: ovc
+          name: ovc-linux-amd64
+          path: ovc-linux-amd64
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-linux-arm64
+          path: ovc-linux-arm64
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-darwin-amd64
+          path: ovc-darwin-amd64
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-darwin-arm64
+          path: ovc-darwin-arm64
 
       - name: Set up Git
         run: |
@@ -118,12 +144,12 @@ jobs:
         id: get_tag
         run: |
           latest_tag=$(git describe --tags `git rev-list --tags --max-count=1` || echo "v0.0.0")
-          echo "::set-output name=tag::$latest_tag"
+          echo "tag=$latest_tag" >> $GITHUB_ENV
 
       - name: Calculate next version
         id: calculate_version
         run: |
-          latest_tag=${{ steps.get_tag.outputs.tag }}
+          latest_tag=${{ env.tag }}
           echo "Latest tag: $latest_tag"
           
           if [[ $latest_tag == v* ]]; then
@@ -142,13 +168,13 @@ jobs:
           fi
           
           new_version="v$major.$minor.$patch"
+          echo "version=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
-          echo "::set-output name=version::$new_version"
 
       - name: Check if Tag Exists
         id: tag_exists
         run: |
-          if git rev-parse "refs/tags/${{ steps.calculate_version.outputs.version }}" >/dev/null 2>&1; then
+          if git rev-parse "refs/tags/${{ env.version }}" >/dev/null 2>&1; then
             echo "Tag exists"
             echo "::set-output name=exists::true"
           else
@@ -161,7 +187,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          new_tag=${{ steps.calculate_version.outputs.version }}
+          new_tag=${{ env.version }}
           git tag $new_tag
           git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git $new_tag
 
@@ -169,15 +195,135 @@ jobs:
         if: steps.tag_exists.outputs.exists == 'false'
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ steps.calculate_version.outputs.version }}
-          name: Release ${{ steps.calculate_version.outputs.version }}
+          tag: ${{ env.version }}
+          name: Release ${{ env.version }}
           draft: false
           prerelease: false
           artifacts: |
-            ovc-linux
-            ovc-darwin
-            ovc.exe
-            ovc-linux.sha256
-            ovc-darwin.sha256
-            ovc.exe.sha256
+            ovc-linux-amd64/ovc-linux-amd64
+            ovc-linux-arm64/ovc-linux-arm64
+            ovc-darwin-amd64/ovc-darwin-amd64
+            ovc-darwin-arm64/ovc-darwin-arm64
+            ovc-linux-amd64/ovc-linux-amd64.sha256
+            ovc-linux-arm64/ovc-linux-arm64.sha256
+            ovc-darwin-amd64/ovc-darwin-amd64.sha256
+            ovc-darwin-arm64/ovc-darwin-arm64.sha256
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  update_formula:
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-linux-amd64
+          path: ovc-linux-amd64
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-linux-arm64
+          path: ovc-linux-arm64
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-darwin-amd64
+          path: ovc-darwin-amd64
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ovc-darwin-arm64
+          path: ovc-darwin-arm64
+
+      - name: Calculate SHA256 Checksums
+        run: |
+          sha256_linux_amd64=$(sha256sum ovc-linux-amd64/ovc-linux-amd64 | awk '{ print $1 }')
+          sha256_linux_arm64=$(sha256sum ovc-linux-arm64/ovc-linux-arm64 | awk '{ print $1 }')
+          sha256_darwin_amd64=$(sha256sum ovc-darwin-amd64/ovc-darwin-amd64 | awk '{ print $1 }')
+          sha256_darwin_arm64=$(sha256sum ovc-darwin-arm64/ovc-darwin-arm64 | awk '{ print $1 }')
+          echo "sha256_linux_amd64=$sha256_linux_amd64" >> $GITHUB_ENV
+          echo "sha256_linux_arm64=$sha256_linux_arm64" >> $GITHUB_ENV
+          echo "sha256_darwin_amd64=$sha256_darwin_amd64" >> $GITHUB_ENV
+          echo "sha256_darwin_arm64=$sha256_darwin_arm64" >> $GITHUB_ENV
+
+      - name: Update Homebrew Formula
+        run: |
+          version=${{ env.version }}
+          sha256_linux_amd64=${{ env.sha256_linux_amd64 }}
+          sha256_linux_arm64=${{ env.sha256_linux_arm64 }}
+          sha256_darwin_amd64=${{ env.sha256_darwin_amd64 }}
+          sha256_darwin_arm64=${{ env.sha256_darwin_arm64 }}
+
+          formula_file="Formula/ovc.rb"
+          url_linux_amd64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-linux-amd64"
+          url_linux_arm64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-linux-arm64"
+          url_darwin_amd64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-darwin-amd64"
+          url_darwin_arm64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-darwin-arm64"
+
+          cat <<EOF > $formula_file
+          class Ovc < Formula
+          desc "CLI to install the virtual-cluster-operator Helm chart"
+          homepage "https://github.com/OpenVirtualCluster/cli"
+          version "${version}"
+          
+          if OS.mac?
+            if Hardware::CPU.intel?
+              url "${url_darwin_amd64}"
+              sha256 "${sha256_darwin_amd64}"
+            elsif Hardware::CPU.arm?
+              url "${url_darwin_arm64}"
+              sha256 "${sha256_darwin_arm64}"
+            end
+          elsif OS.linux?
+            if Hardware::CPU.intel?
+              url "${url_linux_amd64}"
+              sha256 "${sha256_linux_amd64}"
+            elsif Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+              url "${url_linux_arm64}"
+              sha256 "${sha256_linux_arm64}"
+            end
+          end
+          
+          def install
+          if OS.mac?
+            if Hardware::CPU.intel?
+              bin.install "ovc-darwin-amd64" => "ovc"
+            elsif Hardware::CPU.arm?
+              bin.install "ovc-darwin-arm64" => "ovc"
+            end
+          elsif OS.linux?
+            if Hardware::CPU.intel?
+              bin.install "ovc-linux-amd64" => "ovc"
+            elsif Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+              bin.install "ovc-linux-arm64" => "ovc"
+            end
+          end
+          end
+          
+          test do
+            system "#{bin}/ovc", "version"
+          end
+          end
+          EOF
+
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git add Formula/ovc.rb
+          git commit -m "Update Homebrew formula for version ${{ env.version }}"
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git
