@@ -215,18 +215,18 @@ jobs:
     needs: release
 
     steps:
-      - name: Checkout code
+      - name: Checkout Homebrew Tap Repository
         uses: actions/checkout@v3
         with:
+          repository: OpenVirtualCluster/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.TAP_REPO_PAT }}
           fetch-depth: 0
 
       - name: Set up Git
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-
-      - name: Create Formula Directory
-        run: mkdir -p Formula
 
       - name: Download Artifacts
         uses: actions/download-artifact@v3
@@ -271,7 +271,7 @@ jobs:
           sha256_darwin_amd64=${{ env.sha256_darwin_amd64 }}
           sha256_darwin_arm64=${{ env.sha256_darwin_arm64 }}
 
-          formula_file="Formula/ovc.rb"
+          formula_file="homebrew-tap/Formula/ovc.rb"
           url_linux_amd64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-linux-amd64"
           url_linux_arm64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-linux-arm64"
           url_darwin_amd64="https://github.com/OpenVirtualCluster/cli/releases/download/${version}/ovc-darwin-amd64"
@@ -325,8 +325,9 @@ jobs:
 
       - name: Commit and Push Changes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TAP_REPO_PAT }}
         run: |
+          cd homebrew-tap
           git add Formula/ovc.rb
           git commit -m "Update Homebrew formula for version ${{ env.version }}"
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/cli.git
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/OpenVirtualCluster/homebrew-tap.git
